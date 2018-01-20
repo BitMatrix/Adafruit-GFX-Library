@@ -112,6 +112,8 @@ class Adafruit_GFX : public Print {
   virtual void   write(uint8_t);
 #endif
 
+  int16_t findGlyphIndex(uint8_t c);
+
   int16_t height(void) const;
   int16_t width(void) const;
 

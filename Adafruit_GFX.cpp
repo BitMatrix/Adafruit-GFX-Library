@@ -833,31 +833,23 @@ void Adafruit_GFX::write(uint8_t c) {
             cursor_y += (int16_t)textsize *
                         (uint8_t)pgm_read_byte(&gfxFont->yAdvance);
         } else if(c != '\r') {
-            uint16_t glyphCount = pgm_read_word(&gfxFont->glyphCount);
-			if (glyphCount > 0)
+			int16_t glyphIndex = findGlyphIndex(c);
+			if (glyphIndex != -1)
 			{
-				Serial.printf("glyphCount is %d, looking for %d '%c'\n", glyphCount, c, c);
-				for (uint16_t i = 0; i < glyphCount; i++) {
-					GFXglyph *glyph = &(((GFXglyph *)pgm_read_pointer(&gfxFont->glyph))[i]);
-					uint16_t charCode = pgm_read_word(&glyph->charCode);
-					if (charCode == c)
-					{
-						Serial.printf("FOUND glyph %d '%c' at index %d\n", c, c, i);
-						uint8_t w = pgm_read_byte(&glyph->width);
-						uint8_t h = pgm_read_byte(&glyph->height);
-						if ((w > 0) && (h > 0)) { // Is there an associated bitmap?
-							int16_t xo = (int8_t)pgm_read_byte(&glyph->xOffset); // sic
-							if (wrap && ((cursor_x + textsize * (xo + w)) > _width)) {
-								cursor_x = 0;
-								cursor_y += (int16_t)textsize *
-									(uint8_t)pgm_read_byte(&gfxFont->yAdvance);
-							}
-							drawChar(cursor_x, cursor_y, c, textcolor, textbgcolor, textsize, i);
-						}
-						cursor_x += (uint8_t)pgm_read_byte(&glyph->xAdvance) * (int16_t)textsize;
-						break;
+				GFXglyph *glyph = &(((GFXglyph *)pgm_read_pointer(&gfxFont->glyph))[glyphIndex]);
+				uint16_t charCode = pgm_read_word(&glyph->charCode);
+				uint8_t w = pgm_read_byte(&glyph->width);
+				uint8_t h = pgm_read_byte(&glyph->height);
+				if ((w > 0) && (h > 0)) { // Is there an associated bitmap?
+					int16_t xo = (int8_t)pgm_read_byte(&glyph->xOffset); // sic
+					if (wrap && ((cursor_x + textsize * (xo + w)) > _width)) {
+						cursor_x = 0;
+						cursor_y += (int16_t)textsize *
+							(uint8_t)pgm_read_byte(&gfxFont->yAdvance);
 					}
+					drawChar(cursor_x, cursor_y, c, textcolor, textbgcolor, textsize, glyphIndex);
 				}
+				cursor_x += (uint8_t)pgm_read_byte(&glyph->xAdvance) * (int16_t)textsize;
 			}
 			// fallback to default behaviour for downward compatibility
 			else {
@@ -885,6 +877,22 @@ void Adafruit_GFX::write(uint8_t c) {
 #if ARDUINO >= 100
     return 1;
 #endif
+}
+
+int16_t Adafruit_GFX::findGlyphIndex(uint8_t c) {
+	if (gfxFont)
+	{
+		uint16_t glyphCount = pgm_read_word(&gfxFont->glyphCount);
+		for (uint16_t i = 0; i < glyphCount; i++) {
+			GFXglyph *glyph = &(((GFXglyph *)pgm_read_pointer(&gfxFont->glyph))[i]);
+			uint16_t charCode = pgm_read_word(&glyph->charCode);
+			if (charCode == c)
+			{
+				return i;
+			}
+		}
+	}
+	return -1;
 }
 
 void Adafruit_GFX::setCursor(int16_t x, int16_t y) {
@@ -976,31 +984,29 @@ void Adafruit_GFX::charBounds(char c, int16_t *x, int16_t *y,
             *x  = 0;    // Reset x to zero, advance y by one line
             *y += textsize * (uint8_t)pgm_read_byte(&gfxFont->yAdvance);
         } else if(c != '\r') { // Not a carriage return; is normal char
-            uint8_t first = pgm_read_byte(&gfxFont->first),
-                    last  = pgm_read_byte(&gfxFont->last);
-            if((c >= first) && (c <= last)) { // Char present in this font?
-                GFXglyph *glyph = &(((GFXglyph *)pgm_read_pointer(
-                  &gfxFont->glyph))[c - first]);
-                uint8_t gw = pgm_read_byte(&glyph->width),
-                        gh = pgm_read_byte(&glyph->height),
-                        xa = pgm_read_byte(&glyph->xAdvance);
-                int8_t  xo = pgm_read_byte(&glyph->xOffset),
-                        yo = pgm_read_byte(&glyph->yOffset);
-                if(wrap && ((*x+(((int16_t)xo+gw)*textsize)) > _width)) {
-                    *x  = 0; // Reset x to zero, advance y by one line
-                    *y += textsize * (uint8_t)pgm_read_byte(&gfxFont->yAdvance);
-                }
-                int16_t ts = (int16_t)textsize,
-                        x1 = *x + xo * ts,
-                        y1 = *y + yo * ts,
-                        x2 = x1 + gw * ts - 1,
-                        y2 = y1 + gh * ts - 1;
-                if(x1 < *minx) *minx = x1;
-                if(y1 < *miny) *miny = y1;
-                if(x2 > *maxx) *maxx = x2;
-                if(y2 > *maxy) *maxy = y2;
-                *x += xa * ts;
-            }
+			int16_t glyphIndex = findGlyphIndex(c);
+			if (glyphIndex != -1) {
+				GFXglyph *glyph = &(((GFXglyph *)pgm_read_pointer(&gfxFont->glyph))[glyphIndex]);
+				uint8_t gw = pgm_read_byte(&glyph->width);
+				uint8_t gh = pgm_read_byte(&glyph->height);
+				uint8_t xa = pgm_read_byte(&glyph->xAdvance);
+				int8_t xo = pgm_read_byte(&glyph->xOffset);
+				int8_t yo = pgm_read_byte(&glyph->yOffset);
+				if (wrap && ((*x + (((int16_t)xo + gw)*textsize)) > _width)) {
+					*x = 0; // Reset x to zero, advance y by one line
+					*y += textsize * (uint8_t)pgm_read_byte(&gfxFont->yAdvance);
+				}
+				int16_t ts = (int16_t)textsize,
+					x1 = *x + xo * ts,
+					y1 = *y + yo * ts,
+					x2 = x1 + gw * ts - 1,
+					y2 = y1 + gh * ts - 1;
+				if (x1 < *minx) *minx = x1;
+				if (y1 < *miny) *miny = y1;
+				if (x2 > *maxx) *maxx = x2;
+				if (y2 > *maxy) *maxy = y2;
+				*x += xa * ts;
+			}
         }
 
     } else { // Default font
