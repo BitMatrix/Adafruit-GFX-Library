@@ -12,6 +12,7 @@ typedef struct { // Data stored PER GLYPH
 	uint8_t  width, height;    // Bitmap dimensions in pixels
 	uint8_t  xAdvance;         // Distance to advance cursor (x axis)
 	int8_t   xOffset, yOffset; // Dist from cursor pos to UL corner
+	uint16_t charCode;         // Char code represented by this glyph
 } GFXglyph;
 
 typedef struct { // Data stored for FONT AS A WHOLE:
@@ -19,6 +20,7 @@ typedef struct { // Data stored for FONT AS A WHOLE:
 	GFXglyph *glyph;       // Glyph array
 	uint8_t   first, last; // ASCII extents
 	uint8_t   yAdvance;    // Newline distance (y axis)
+	uint16_t glyphCount;   // Total glyph count available
 } GFXfont;
 
 #endif // _GFXFONT_H_

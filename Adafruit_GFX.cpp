@@ -708,7 +708,7 @@ void Adafruit_GFX::drawRGBBitmap(int16_t x, int16_t y,
 
 // Draw a character
 void Adafruit_GFX::drawChar(int16_t x, int16_t y, unsigned char c,
-  uint16_t color, uint16_t bg, uint8_t size) {
+  uint16_t color, uint16_t bg, uint8_t size, const uint16_t charIndex) {
 
     if(!gfxFont) { // 'Classic' built-in font
 
@@ -749,8 +749,9 @@ void Adafruit_GFX::drawChar(int16_t x, int16_t y, unsigned char c,
         // newlines, returns, non-printable characters, etc.  Calling
         // drawChar() directly with 'bad' characters of font may cause mayhem!
 
-        c -= (uint8_t)pgm_read_byte(&gfxFont->first);
-        GFXglyph *glyph  = &(((GFXglyph *)pgm_read_pointer(&gfxFont->glyph))[c]);
+        // Use the charIndex if specified, otherwise fall back to default behavior
+		uint16_t ci = charIndex >= 0 ? charIndex : (c - (uint8_t)pgm_read_byte(&gfxFont->first));
+        GFXglyph *glyph  = &(((GFXglyph *)pgm_read_pointer(&gfxFont->glyph))[ci]);
         uint8_t  *bitmap = (uint8_t *)pgm_read_pointer(&gfxFont->bitmap);
 
         uint16_t bo = pgm_read_word(&glyph->bitmapOffset);
@@ -832,23 +833,52 @@ void Adafruit_GFX::write(uint8_t c) {
             cursor_y += (int16_t)textsize *
                         (uint8_t)pgm_read_byte(&gfxFont->yAdvance);
         } else if(c != '\r') {
-            uint8_t first = pgm_read_byte(&gfxFont->first);
-            if((c >= first) && (c <= (uint8_t)pgm_read_byte(&gfxFont->last))) {
-                GFXglyph *glyph = &(((GFXglyph *)pgm_read_pointer(
-                  &gfxFont->glyph))[c - first]);
-                uint8_t   w     = pgm_read_byte(&glyph->width),
-                          h     = pgm_read_byte(&glyph->height);
-                if((w > 0) && (h > 0)) { // Is there an associated bitmap?
-                    int16_t xo = (int8_t)pgm_read_byte(&glyph->xOffset); // sic
-                    if(wrap && ((cursor_x + textsize * (xo + w)) > _width)) {
-                        cursor_x  = 0;
-                        cursor_y += (int16_t)textsize *
-                          (uint8_t)pgm_read_byte(&gfxFont->yAdvance);
-                    }
-                    drawChar(cursor_x, cursor_y, c, textcolor, textbgcolor, textsize);
-                }
-                cursor_x += (uint8_t)pgm_read_byte(&glyph->xAdvance) * (int16_t)textsize;
-            }
+            uint16_t glyphCount = pgm_read_word(&gfxFont->glyphCount);
+			if (glyphCount > 0)
+			{
+				Serial.printf("glyphCount is %d, looking for %d '%c'\n", glyphCount, c, c);
+				for (uint16_t i = 0; i < glyphCount; i++) {
+					GFXglyph *glyph = &(((GFXglyph *)pgm_read_pointer(&gfxFont->glyph))[i]);
+					uint16_t charCode = pgm_read_word(&glyph->charCode);
+					if (charCode == c)
+					{
+						Serial.printf("FOUND glyph %d '%c' at index %d\n", c, c, i);
+						uint8_t w = pgm_read_byte(&glyph->width);
+						uint8_t h = pgm_read_byte(&glyph->height);
+						if ((w > 0) && (h > 0)) { // Is there an associated bitmap?
+							int16_t xo = (int8_t)pgm_read_byte(&glyph->xOffset); // sic
+							if (wrap && ((cursor_x + textsize * (xo + w)) > _width)) {
+								cursor_x = 0;
+								cursor_y += (int16_t)textsize *
+									(uint8_t)pgm_read_byte(&gfxFont->yAdvance);
+							}
+							drawChar(cursor_x, cursor_y, c, textcolor, textbgcolor, textsize, i);
+						}
+						cursor_x += (uint8_t)pgm_read_byte(&glyph->xAdvance) * (int16_t)textsize;
+						break;
+					}
+				}
+			}
+			// fallback to default behaviour for downward compatibility
+			else {
+				uint8_t first = pgm_read_byte(&gfxFont->first);
+				if((c >= first) && (c <= (uint8_t)pgm_read_byte(&gfxFont->last))) {
+				    GFXglyph *glyph = &(((GFXglyph *)pgm_read_pointer(
+				    &gfxFont->glyph))[c - first]);
+				    uint8_t   w     = pgm_read_byte(&glyph->width),
+				            h     = pgm_read_byte(&glyph->height);
+				    if((w > 0) && (h > 0)) { // Is there an associated bitmap?
+				        int16_t xo = (int8_t)pgm_read_byte(&glyph->xOffset); // sic
+				        if(wrap && ((cursor_x + textsize * (xo + w)) > _width)) {
+				            cursor_x  = 0;
+				            cursor_y += (int16_t)textsize *
+				            (uint8_t)pgm_read_byte(&gfxFont->yAdvance);
+				        }
+				        drawChar(cursor_x, cursor_y, c, textcolor, textbgcolor, textsize);
+				    }
+				    cursor_x += (uint8_t)pgm_read_byte(&glyph->xAdvance) * (int16_t)textsize;
+				}
+			}
         }
 
     }

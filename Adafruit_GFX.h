@@ -93,7 +93,7 @@ class Adafruit_GFX : public Print {
     drawRGBBitmap(int16_t x, int16_t y,
       uint16_t *bitmap, uint8_t *mask, int16_t w, int16_t h),
     drawChar(int16_t x, int16_t y, unsigned char c, uint16_t color,
-      uint16_t bg, uint8_t size),
+      uint16_t bg, uint8_t size, const uint16_t charIndex = -1),
     setCursor(int16_t x, int16_t y),
     setTextColor(uint16_t c),
     setTextColor(uint16_t c, uint16_t bg),
